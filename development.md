@@ -11,6 +11,11 @@ repo](https://github.com/dawidbil/plan-b/fork) (having your own
 fork will make it easier to contribute) and
 [clone it](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository).
 
+
+## Setting up .env file
+
+Copy `.env.template` file to `.env` and fill in the secrets
+
 ## Basic Developer Workflows
 
 The `Makefile` simply offers shortcuts to `uv` commands for developer convenience.
