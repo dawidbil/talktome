@@ -56,7 +56,7 @@ style = "pep440"
 bump = "true"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/plan_b"]
+packages = ["src/talktome"]
 
 
 [tool.ruff]
