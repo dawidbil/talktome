@@ -4,8 +4,9 @@ from typing import cast
 import discord
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
-from langchain.schema import HumanMessage
+from langchain.schema import HumanMessage, SystemMessage
 
+from talktome.prompts import SYSTEM_PROMPT
 from talktome.setup_logging import setup_logging
 
 load_dotenv()
@@ -34,13 +35,15 @@ async def on_message(message: discord.Message):
         return
 
     if message.content.startswith("!ela"):
-        response = await chat_model.ainvoke(
-            [
-                HumanMessage(content=message.content),
-            ]
-        )
-        content = cast(str, response.content)
-        await message.channel.send(content)
+        async with message.channel.typing():
+            response = await chat_model.ainvoke(
+                [
+                    SystemMessage(content=SYSTEM_PROMPT.format(user_name=message.author.nick or message.author.name)),
+                    HumanMessage(content=message.content),
+                ]
+            )
+            content = cast(str, response.content)
+            await message.channel.send(content)
 
 
 client.run(os.environ["DISCORD_APP_TOKEN"], log_handler=None)
