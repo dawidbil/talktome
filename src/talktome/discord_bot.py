@@ -38,7 +38,7 @@ async def on_message(message: discord.Message):
         async with message.channel.typing():
             response = await chat_model.ainvoke(
                 [
-                    SystemMessage(content=SYSTEM_PROMPT.format(user_name=message.author.nick or message.author.name)),
+                    SystemMessage(content=SYSTEM_PROMPT.format(user_name=message.author.name)),
                     HumanMessage(content=message.content),
                 ]
             )
