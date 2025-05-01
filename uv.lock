@@ -102,6 +102,24 @@ wheels = [
 ]
 
 [[package]]
+name = "anthropic"
+version = "0.50.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "httpx" },
+    { name = "jiter" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/40/85/4dd9f80da0727c56d7e7f7c627cb724edd9e6df062df6ecc0e90f06e6dbb/anthropic-0.50.0.tar.gz", hash = "sha256:42175ec04ce4ff2fa37cd436710206aadff546ee99d70d974699f59b49adc66f", size = 213021 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/35/ae/975f97ad5581a9e187a3717e21d79d6c7ad6be926fee9aa8a15b3d9f8f37/anthropic-0.50.0-py3-none-any.whl", hash = "sha256:defbd79327ca2fa61fd7b9eb2f1627dfb1f69c25d49288c52e167ddb84574f80", size = 245291 },
+]
+
+[[package]]
 name = "anyio"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -588,9 +606,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ba/83/77392f0a6a560e471075b125656b392d3b889be65ee8e93a5c31aa7a62bb/langchain-0.3.24-py3-none-any.whl", hash = "sha256:596c5444716644ddd0cd819fb2bc9d0fd4221503b219fdfb5016edcfaa7da8ef", size = 1010778 },
 ]
 
-[package.optional-dependencies]
-openai = [
-    { name = "langchain-openai" },
+[[package]]
+name = "langchain-anthropic"
+version = "0.3.12"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anthropic" },
+    { name = "langchain-core" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c8/cc/73514f5316f1d695c722964c7b942dd59de4a0378fa784de68d5340e5acf/langchain_anthropic-0.3.12.tar.gz", hash = "sha256:8f68461369f0c7707dea5950d6f68ce3faa8d49744bc97fb8d3a7c02e84fe840", size = 44728 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/3c/54ccc740960572aece23cd5efb9a661cdd1a358e8c052337bb68d637b98f/langchain_anthropic-0.3.12-py3-none-any.whl", hash = "sha256:39764a0dc79c5777af6396a6160478a2b5b62eada965df778d041e68ac8aeeb9", size = 25974 },
 ]
 
 [[package]]
@@ -613,16 +640,16 @@ wheels = [
 
 [[package]]
 name = "langchain-openai"
-version = "0.3.14"
+version = "0.3.15"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain-core" },
     { name = "openai" },
     { name = "tiktoken" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7f/ec/8042fd9b8cfb8e295eaf673c79fc8139aca0dd75506241b69e77efe2b850/langchain_openai-0.3.14.tar.gz", hash = "sha256:0662db78620c2e5c3ccfc1c36dc959c0ddc80e6bdf7ef81632cbf4b2cc9b9461", size = 270517 }
+sdist = { url = "https://files.pythonhosted.org/packages/34/af/ed8776d088f82fb5fbc69382f712d785097f75c5d8e7cfda4add95632561/langchain_openai-0.3.15.tar.gz", hash = "sha256:f20612af08d715540922f72729e626a3f360ac4affac46863639680443b48fb4", size = 270871 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6f/34/d7af3c272fbdd214aa74d7bb23ef36eb6c3463fd557f2f0cd5126ea41536/langchain_openai-0.3.14-py3-none-any.whl", hash = "sha256:b8e648d2d7678a5540818199d141ff727c6f1514294b3e1e999a95357c9d66a0", size = 62380 },
+    { url = "https://files.pythonhosted.org/packages/ec/1b/323d4980c01a3e9bc4c5c7aac05388797d67696b1c6421172c66d21a4886/langchain_openai-0.3.15-py3-none-any.whl", hash = "sha256:3a21b264c82eb9e14c28f8c79a7129fc857d44563082e639709351091edffd92", size = 62831 },
 ]
 
 [[package]]
@@ -1258,7 +1285,9 @@ name = "talktome"
 source = { editable = "." }
 dependencies = [
     { name = "discord-py" },
-    { name = "langchain", extra = ["openai"] },
+    { name = "langchain" },
+    { name = "langchain-anthropic" },
+    { name = "langchain-openai" },
     { name = "python-dotenv" },
 ]
 
@@ -1275,7 +1304,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "discord-py", specifier = ">=2.5.2" },
-    { name = "langchain", extras = ["openai"], specifier = ">=0.3.24" },
+    { name = "langchain", specifier = ">=0.3.24" },
+    { name = "langchain-anthropic", specifier = ">=0.3.12" },
+    { name = "langchain-openai", specifier = ">=0.3.15" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
 ]
 
