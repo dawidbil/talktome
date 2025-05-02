@@ -19,4 +19,9 @@ def setup_logging():
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
+    httpx_logger = logging.getLogger("httpx")
+    httpx_logger.setLevel(logging.WARNING)
+    httpcore_logger = logging.getLogger("httpcore")
+    httpcore_logger.setLevel(logging.WARNING)
+
     return logger
