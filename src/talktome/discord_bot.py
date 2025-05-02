@@ -55,7 +55,7 @@ async def on_message(message: discord.Message):
 
     async with message.channel.typing():
         if await chatbot.is_violating_openai_content_policy(message.content):
-            await message.channel.send("This message was flagged as inappropriate.")
+            await message.channel.send(prompts.get_prompt("DISCORD_INAPPROPRIATE_MESSAGE"))
             return
         response = await get_model_response(message, model)
         await message.channel.send(response)
