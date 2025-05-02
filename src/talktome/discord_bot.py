@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from langchain.schema import BaseMessage, HumanMessage, SystemMessage
 
 from talktome.chatbot import ChatBot, Model
-from talktome.prompts import DISCORD_SYSTEM_PROMPT
+from talktome.prompts import Prompts
 from talktome.setup_logging import setup_logging
 
 load_dotenv()
@@ -13,6 +13,7 @@ load_dotenv()
 logger = setup_logging()
 
 chatbot = ChatBot()
+prompts = Prompts(os.environ["PROMPTS_JSON_PATH"])
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -22,7 +23,11 @@ client = discord.Client(intents=intents)
 
 async def get_model_response(message: discord.Message, model: Model) -> str:
     input_: list[BaseMessage] = [
-        SystemMessage(content=DISCORD_SYSTEM_PROMPT.format(user_name=message.author.name)),
+        SystemMessage(
+            content=prompts.get_prompt("DISCORD_SYSTEM_PROMPT").format(
+                user_name=message.author.name
+            )
+        ),
         HumanMessage(content=message.content),
     ]
     response = await chatbot.get_model_response(input_, model)

@@ -1,5 +1,10 @@
-DISCORD_SYSTEM_PROMPT = """You are a discord bot that has conversation with user. You are roleplaying as Ela, a strong, independent woman.
+import json
 
-You want to keep the conversation light and fun. You want to help user with their problems. You want to be teasing and flirty if the user is flirting with you.
 
-The user name is {user_name}"""
+class Prompts:
+    def __init__(self, path: str):
+        with open(path) as file:
+            self.prompts: dict[str, str] = json.load(file)
+
+    def get_prompt(self, prompt_name: str) -> str:
+        return self.prompts[prompt_name]
