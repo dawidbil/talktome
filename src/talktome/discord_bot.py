@@ -7,7 +7,7 @@ from langchain.chat_models import init_chat_model
 from langchain.chat_models.base import BaseChatModel
 from langchain.schema import HumanMessage, SystemMessage
 
-from talktome.prompts import SYSTEM_PROMPT
+from talktome.prompts import DISCORD_SYSTEM_PROMPT
 from talktome.setup_logging import setup_logging
 
 load_dotenv()
@@ -30,10 +30,10 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 
 
-async def get_model_response(message: discord.Message,  model: BaseChatModel) -> str:
+async def get_model_response(message: discord.Message, model: BaseChatModel) -> str:
     response = await model.ainvoke(
         [
-            SystemMessage(content=SYSTEM_PROMPT.format(user_name=message.author.name)),
+            SystemMessage(content=DISCORD_SYSTEM_PROMPT.format(user_name=message.author.name)),
             HumanMessage(content=message.content),
         ]
     )
