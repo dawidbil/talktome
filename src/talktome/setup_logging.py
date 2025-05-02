@@ -3,7 +3,7 @@ import logging.handlers
 
 
 def setup_logging():
-    logger = logging.getLogger("discord")
+    logger = logging.getLogger("root")
     logger.setLevel(logging.DEBUG)
 
     handler = logging.handlers.RotatingFileHandler(
