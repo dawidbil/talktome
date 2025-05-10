@@ -17,6 +17,7 @@ load_dotenv()
 
 TOKEN_USAGE_LIMIT = int(os.environ["DISCORD_TOKEN_USAGE_LIMIT"])
 POWER_USER_IDS: list[int] = cast(list[int], json.loads(os.environ["POWER_USERS_IDS"]))
+DISCORD_BOT_NAME = os.environ["DISCORD_BOT_NAME"]
 
 logger = setup_logging()
 
@@ -101,14 +102,14 @@ async def on_message(message: discord.Message):
     if message.author == client.user:
         return
 
-    if message.content.startswith("!ela_token_usage"):
+    if message.content.startswith(f"!{DISCORD_BOT_NAME}_token_usage"):
         async with message.channel.typing():
             await message.channel.send(
                 f"Token usage for {message.channel.id} in the last 24 hours: {token_usage_last_24_hours(message.channel.id)}"
             )
             return
 
-    if message.content.startswith("!token_usage"):
+    if message.content.startswith(f"!{DISCORD_BOT_NAME}_token_usage"):
         if message.author.id not in POWER_USER_IDS:
             await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
             return
@@ -118,7 +119,7 @@ async def on_message(message: discord.Message):
             )
         return
 
-    if message.content.startswith("!reset_token_usage"):
+    if message.content.startswith(f"!{DISCORD_BOT_NAME}_reset_token_usage"):
         if message.author.id not in POWER_USER_IDS:
             await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
             return
