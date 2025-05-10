@@ -105,9 +105,7 @@ async def on_message(message: discord.Message):
 
     if client.user.mentioned_in(message):
         if is_token_usage_reached(message.channel.id):
-            await message.channel.send(
-                "Token usage limit reached. Use !token_usage to check the usage."
-            )
+            await message.channel.send(prompts.get_prompt("DISCORD_TOKEN_USAGE_LIMIT_REACHED"))
             return
         async with message.channel.typing():
             await send_conversation_message(message, client.user.name)
