@@ -3,6 +3,12 @@ import logging.handlers
 
 
 def setup_logging():
+    adjust_unused_logging()
+    setup_terminal_logging()
+    return setup_file_logging()
+
+
+def setup_file_logging():
     logger = logging.getLogger("root")
     logger.setLevel(logging.DEBUG)
 
@@ -18,10 +24,19 @@ def setup_logging():
     )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
-
-    adjust_unused_logging()
-
     return logger
+
+
+def setup_terminal_logging():
+    logger = logging.getLogger("talktome")
+    logger.setLevel(logging.INFO)
+    terminal_handler = logging.StreamHandler()
+    dt_fmt = "%Y-%m-%d %H:%M:%S"
+    formatter = logging.Formatter(
+        "[{asctime}] [{levelname:<8}] {name}: {message}", dt_fmt, style="{"
+    )
+    terminal_handler.setFormatter(formatter)
+    logger.addHandler(terminal_handler)
 
 
 def adjust_unused_logging():

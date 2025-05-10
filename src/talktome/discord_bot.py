@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import cast
 
 import discord
+from discord.ext import commands
 from dotenv import load_dotenv
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
@@ -29,6 +30,7 @@ load_dotenv()
 TOKEN_USAGE_LIMIT = int(os.environ["DISCORD_TOKEN_USAGE_LIMIT"])
 POWER_USER_IDS: list[int] = cast(list[int], json.loads(os.environ["POWER_USERS_IDS"]))
 DISCORD_BOT_NAME = os.environ["DISCORD_BOT_NAME"]
+TESTING_GUILD = discord.Object(id=int(os.environ["TESTING_GUILD_ID"]))
 
 logger = setup_logging()
 
@@ -39,7 +41,7 @@ channel_cache = ChannelCache(chatbot, int(os.environ["CHANNEL_MESSAGE_HISTORY_LI
 intents = discord.Intents.default()
 intents.message_content = True
 
-client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 def get_message(message: Message, client_name: str) -> BaseMessage:
@@ -110,17 +112,18 @@ def replace_mentions_with_display_name(message: discord.Message):
             message.content = message.content.replace(pattern, user.display_name)
 
 
-@client.event
+@bot.event
 async def on_ready():
-    logger.info(f"We have logged in as {client.user}")
+    await bot.tree.sync(guild=TESTING_GUILD)
     with SessionLocal() as db:
         delete_request_tokens_older_than_24_hours(db)
+    logger.info(f"We have logged in as {bot.user}")
 
 
-@client.event
+@bot.event
 async def on_message(message: discord.Message):
-    assert client.user is not None
-    if message.author == client.user:
+    assert bot.user is not None
+    if message.author == bot.user:
         return
 
     if message.content.startswith(f"!{DISCORD_BOT_NAME}_token_usage"):
@@ -184,13 +187,28 @@ async def on_message(message: discord.Message):
 
     replace_mentions_with_display_name(message)
 
-    if client.user.mentioned_in(message):
+    if bot.user.mentioned_in(message):
         if is_token_usage_reached(message.channel.id):
             await message.channel.send(prompts.get_prompt("DISCORD_TOKEN_USAGE_LIMIT_REACHED"))
             return
         async with message.channel.typing():
-            await send_conversation_message(message, client.user.name)
+            await send_conversation_message(message, bot.user.name)
         return
 
 
-client.run(os.environ["DISCORD_APP_TOKEN"], log_handler=None)
+@bot.tree.command(
+    name="token_usage",
+    description="Get the token usage for the current channel",
+    guild=TESTING_GUILD,
+)
+async def token_usage(interaction: discord.Interaction):
+    channel_id = interaction.channel_id
+    if channel_id is None:
+        await interaction.response.send_message("Channel not found")
+        return
+    await interaction.response.send_message(
+        f"Token usage for {channel_id} in the last 24 hours: {token_usage_last_24_hours(channel_id)}"
+    )
+
+
+bot.run(os.environ["DISCORD_APP_TOKEN"], log_handler=None)
