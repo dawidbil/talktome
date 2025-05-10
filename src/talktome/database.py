@@ -1,9 +1,12 @@
+import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import DateTime, Integer, create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -41,3 +44,14 @@ class Database:
                 .order_by(RequestTokens.created_at.desc())
                 .all()
             )
+
+    def delete_request_tokens_older_than_24_hours(self):
+        with self.Session() as session:
+            request_tokens_to_delete = session.query(RequestTokens).filter(
+                RequestTokens.created_at < datetime.now(tz=UTC) - timedelta(hours=24)
+            )
+            logger.info(
+                f"Deleting {request_tokens_to_delete.count()} request tokens older than 24 hours"
+            )
+            request_tokens_to_delete.delete()
+            session.commit()

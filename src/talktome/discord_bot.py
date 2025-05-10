@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta
 
 import discord
 from dotenv import load_dotenv
@@ -18,6 +19,8 @@ chatbot = ChatBot()
 prompts = Prompts(os.environ["PROMPTS_JSON_PATH"])
 channel_cache = ChannelCache(chatbot, int(os.environ["CHANNEL_MESSAGE_HISTORY_LIMIT"]))
 database = Database()
+
+token_usage_limit = int(os.environ["DISCORD_TOKEN_USAGE_LIMIT"])
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -65,6 +68,13 @@ async def send_conversation_message(message: discord.Message, client_name: str):
     await message.channel.send(response["content"])
 
 
+def is_token_usage_reached(channel_id: int):
+    token_usage = database.get_request_tokens(channel_id)
+    day_ago = datetime.now() - timedelta(hours=24)
+    token_usage_last_24_hours = [row for row in token_usage if row.created_at > day_ago]
+    return sum([row.tokens for row in token_usage_last_24_hours]) >= token_usage_limit
+
+
 def replace_mentions_with_display_name(message: discord.Message):
     for user in message.mentions:
         mention_patterns = [f"<@{user.id}>", f"<@!{user.id}>"]
@@ -75,6 +85,7 @@ def replace_mentions_with_display_name(message: discord.Message):
 @client.event
 async def on_ready():
     logger.info(f"We have logged in as {client.user}")
+    database.delete_request_tokens_older_than_24_hours()
 
 
 @client.event
@@ -93,6 +104,11 @@ async def on_message(message: discord.Message):
     replace_mentions_with_display_name(message)
 
     if client.user.mentioned_in(message):
+        if is_token_usage_reached(message.channel.id):
+            await message.channel.send(
+                "Token usage limit reached. Use !token_usage to check the usage."
+            )
+            return
         async with message.channel.typing():
             await send_conversation_message(message, client.user.name)
         return
