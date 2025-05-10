@@ -180,3 +180,6 @@ cython_debug/
 
 # Prompts
 prompts.json
+
+# Database
+database.db
