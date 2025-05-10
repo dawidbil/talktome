@@ -122,6 +122,7 @@ async def check_if_user_is_authorized(ctx: Context[Bot]):
 @bot.event
 async def on_ready():
     await bot.tree.sync(guild=TESTING_GUILD)
+    await bot.tree.sync()
     with SessionLocal() as db:
         delete_request_tokens_older_than_24_hours(db)
     logger.info(f"We have logged in as {bot.user} with discord bot name {DISCORD_BOT_NAME}")
@@ -165,15 +166,11 @@ async def token_usage(interaction: discord.Interaction):
     if channel_id is None:
         await interaction.response.send_message("Channel not found")
         return
-    with SessionLocal() as db:
-        token_requests = get_request_tokens(db, channel_id)
-    last_message_timestamp = token_requests[-1].created_at
-    last_message_timestamp_str = last_message_timestamp.strftime("%Y-%m-%d %H:%M:%S")
     token_usage = token_usage_last_24_hours(channel_id)
     token_limit = get_channel_token_limit_or_default(channel_id)
     token_usage_percentage = min(token_usage / token_limit, 1)
     await interaction.response.send_message(
-        f"Token usage in the last 24 hours: {token_usage_percentage:.2%}. Token usage reset at {last_message_timestamp_str}"
+        f"Token usage in the last 24 hours: {token_usage_percentage:.2%}"
     )
 
 
