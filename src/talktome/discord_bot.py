@@ -9,7 +9,18 @@ from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from talktome.channel_cache import ChannelCache, Message
 from talktome.chatbot import ChatBot, MessageWithUsage, Model
-from talktome.database import Database
+from talktome.crud.channel_token_limits import (
+    delete_channel_token_limit,
+    get_channel_token_limit,
+    set_channel_token_limit,
+)
+from talktome.crud.request_tokens import (
+    add_request_tokens,
+    delete_request_tokens,
+    delete_request_tokens_older_than_24_hours,
+    get_request_tokens,
+)
+from talktome.database import SessionLocal
 from talktome.prompts import Prompts
 from talktome.setup_logging import setup_logging
 
@@ -24,7 +35,6 @@ logger = setup_logging()
 chatbot = ChatBot()
 prompts = Prompts(os.environ["PROMPTS_JSON_PATH"])
 channel_cache = ChannelCache(chatbot, int(os.environ["CHANNEL_MESSAGE_HISTORY_LIMIT"]))
-database = Database()
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -68,26 +78,29 @@ async def send_conversation_message(message: discord.Message, client_name: str):
         message for message in channel_messages if not message.violating_openai_content_policy
     ]
     response = await get_conversation_model_response(filtered_messages, client_name)
-    database.add_request_tokens(message.channel.id, response["usage"])
+    with SessionLocal() as db:
+        add_request_tokens(db, message.channel.id, response["usage"])
     await message.channel.send(response["content"])
 
 
 def token_usage_last_24_hours(channel_id: int) -> int:
-    token_usage = database.get_request_tokens(channel_id)
+    with SessionLocal() as db:
+        token_usage = get_request_tokens(db, channel_id)
     day_ago = datetime.now() - timedelta(hours=24)
     token_usage_last_24_hours = [row for row in token_usage if row.created_at > day_ago]
     return sum([row.tokens for row in token_usage_last_24_hours])
 
 
-def get_channel_token_limit(channel_id: int):
-    limit = database.get_channel_token_limit(channel_id)
+def get_channel_token_limit_or_default(channel_id: int):
+    with SessionLocal() as db:
+        limit = get_channel_token_limit(db, channel_id)
     if limit == 0:
         return TOKEN_USAGE_LIMIT
     return limit
 
 
 def is_token_usage_reached(channel_id: int):
-    return token_usage_last_24_hours(channel_id) >= get_channel_token_limit(channel_id)
+    return token_usage_last_24_hours(channel_id) >= get_channel_token_limit_or_default(channel_id)
 
 
 def replace_mentions_with_display_name(message: discord.Message):
@@ -100,7 +113,8 @@ def replace_mentions_with_display_name(message: discord.Message):
 @client.event
 async def on_ready():
     logger.info(f"We have logged in as {client.user}")
-    database.delete_request_tokens_older_than_24_hours()
+    with SessionLocal() as db:
+        delete_request_tokens_older_than_24_hours(db)
 
 
 @client.event
@@ -121,16 +135,18 @@ async def on_message(message: discord.Message):
             await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
             return
         async with message.channel.typing():
-            await message.channel.send(
-                f"Token usage for {message.channel.id}:\n{database.get_request_tokens(message.channel.id)}"
-            )
+            with SessionLocal() as db:
+                await message.channel.send(
+                    f"Token usage for {message.channel.id}:\n{get_request_tokens(db, message.channel.id)}"
+                )
         return
 
     if message.content.startswith(f"!{DISCORD_BOT_NAME}_reset_token_usage"):
         if message.author.id not in POWER_USER_IDS:
             await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
             return
-        database.delete_request_tokens(message.channel.id)
+        with SessionLocal() as db:
+            delete_request_tokens(db, message.channel.id)
         await message.channel.send("Token usage reset")
         return
 
@@ -138,11 +154,12 @@ async def on_message(message: discord.Message):
         if message.author.id not in POWER_USER_IDS:
             await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
             return
-        limit = int(message.content.split(" ")[1])  
+        limit = int(message.content.split(" ")[1])
         if limit < 0:
             await message.channel.send("Token limit cannot be negative")
             return
-        database.set_channel_token_limit(message.channel.id, limit)
+        with SessionLocal() as db:
+            set_channel_token_limit(db, message.channel.id, limit)
         await message.channel.send(f"Token limit set to {limit}")
         return
 
@@ -150,14 +167,18 @@ async def on_message(message: discord.Message):
         if message.author.id not in POWER_USER_IDS:
             await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
             return
-        await message.channel.send(f"Token limit for {message.channel.id}: {get_channel_token_limit(message.channel.id)}")
+        with SessionLocal() as db:
+            await message.channel.send(
+                f"Token limit for {message.channel.id}: {get_channel_token_limit_or_default(message.channel.id)}"
+            )
         return
 
     if message.content.startswith(f"!{DISCORD_BOT_NAME}_delete_token_limit"):
         if message.author.id not in POWER_USER_IDS:
             await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
             return
-        database.delete_channel_token_limit(message.channel.id)
+        with SessionLocal() as db:
+            delete_channel_token_limit(db, message.channel.id)
         await message.channel.send("Token limit deleted")
         return
 
