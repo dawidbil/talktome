@@ -74,7 +74,7 @@ def replace_mentions_with_display_name(message: discord.Message):
 
 @client.event
 async def on_ready():
-    print(f"We have logged in as {client.user}")
+    logger.info(f"We have logged in as {client.user}")
 
 
 @client.event
