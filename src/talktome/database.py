@@ -55,3 +55,14 @@ class Database:
             )
             request_tokens_to_delete.delete()
             session.commit()
+
+    def delete_request_tokens(self, channel_id: int):
+        with self.Session() as session:
+            request_tokens_to_delete = session.query(RequestTokens).filter(
+                RequestTokens.channel_id == channel_id
+            )
+            logger.info(
+                f"Deleting {request_tokens_to_delete.count()} request tokens for channel {channel_id}"
+            )
+            request_tokens_to_delete.delete()
+            session.commit()

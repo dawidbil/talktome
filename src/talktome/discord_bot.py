@@ -1,5 +1,7 @@
+import json
 import os
 from datetime import datetime, timedelta
+from typing import cast
 
 import discord
 from dotenv import load_dotenv
@@ -13,14 +15,15 @@ from talktome.setup_logging import setup_logging
 
 load_dotenv()
 
+TOKEN_USAGE_LIMIT = int(os.environ["DISCORD_TOKEN_USAGE_LIMIT"])
+POWER_USER_IDS: list[int] = cast(list[int], json.loads(os.environ["POWER_USERS_IDS"]))
+
 logger = setup_logging()
 
 chatbot = ChatBot()
 prompts = Prompts(os.environ["PROMPTS_JSON_PATH"])
 channel_cache = ChannelCache(chatbot, int(os.environ["CHANNEL_MESSAGE_HISTORY_LIMIT"]))
 database = Database()
-
-token_usage_limit = int(os.environ["DISCORD_TOKEN_USAGE_LIMIT"])
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -68,11 +71,15 @@ async def send_conversation_message(message: discord.Message, client_name: str):
     await message.channel.send(response["content"])
 
 
-def is_token_usage_reached(channel_id: int):
+def token_usage_last_24_hours(channel_id: int) -> int:
     token_usage = database.get_request_tokens(channel_id)
     day_ago = datetime.now() - timedelta(hours=24)
     token_usage_last_24_hours = [row for row in token_usage if row.created_at > day_ago]
-    return sum([row.tokens for row in token_usage_last_24_hours]) >= token_usage_limit
+    return sum([row.tokens for row in token_usage_last_24_hours])
+
+
+def is_token_usage_reached(channel_id: int):
+    return token_usage_last_24_hours(channel_id) >= TOKEN_USAGE_LIMIT
 
 
 def replace_mentions_with_display_name(message: discord.Message):
@@ -94,11 +101,29 @@ async def on_message(message: discord.Message):
     if message.author == client.user:
         return
 
+    if message.content.startswith("!ela_token_usage"):
+        async with message.channel.typing():
+            await message.channel.send(
+                f"Token usage for {message.channel.id} in the last 24 hours: {token_usage_last_24_hours(message.channel.id)}"
+            )
+            return
+
     if message.content.startswith("!token_usage"):
+        if message.author.id not in POWER_USER_IDS:
+            await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
+            return
         async with message.channel.typing():
             await message.channel.send(
                 f"Token usage for {message.channel.id}:\n{database.get_request_tokens(message.channel.id)}"
             )
+        return
+
+    if message.content.startswith("!reset_token_usage"):
+        if message.author.id not in POWER_USER_IDS:
+            await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
+            return
+        database.delete_request_tokens(message.channel.id)
+        await message.channel.send("Token usage reset")
         return
 
     replace_mentions_with_display_name(message)
