@@ -127,6 +127,17 @@ async def on_ready():
     logger.info(f"We have logged in as {bot.user} with discord bot name {DISCORD_BOT_NAME}")
 
 
+async def answer_conversation_message(message: discord.Message):
+    if is_token_usage_reached(message.channel.id):
+        await message.channel.send(prompts.get_prompt("DISCORD_TOKEN_USAGE_LIMIT_REACHED"))
+        return
+    assert bot.user is not None
+    async with message.channel.typing():
+        await send_conversation_message(
+            message, bot.user.name, prompt=prompts.get_prompt("DISCORD_CONVERSATION_PROMPT")
+        )
+
+
 @bot.event
 async def on_message(message: discord.Message):
     await bot.process_commands(message)
@@ -136,15 +147,12 @@ async def on_message(message: discord.Message):
 
     replace_mentions_with_display_name(message)
 
-    if bot.user.mentioned_in(message):
-        if is_token_usage_reached(message.channel.id):
-            await message.channel.send(prompts.get_prompt("DISCORD_TOKEN_USAGE_LIMIT_REACHED"))
-            return
-        async with message.channel.typing():
-            await send_conversation_message(
-                message, bot.user.name, prompt=prompts.get_prompt("DISCORD_CONVERSATION_PROMPT")
-            )
+    if isinstance(message.channel, discord.DMChannel):
+        await answer_conversation_message(message)
         return
+
+    if bot.user.mentioned_in(message):
+        await answer_conversation_message(message)
 
 
 @bot.tree.command(
