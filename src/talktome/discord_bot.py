@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import cast
 
 import discord
-from discord.ext import commands
+from discord.ext.commands import Bot, Context
 from dotenv import load_dotenv
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
@@ -41,7 +41,7 @@ channel_cache = ChannelCache(chatbot, int(os.environ["CHANNEL_MESSAGE_HISTORY_LI
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = Bot(command_prefix="!", intents=intents)
 
 
 def get_message(message: Message, client_name: str) -> BaseMessage:
@@ -52,11 +52,11 @@ def get_message(message: Message, client_name: str) -> BaseMessage:
 
 
 async def get_conversation_model_response(
-    messages: list[Message], client_name: str
+    messages: list[Message], client_name: str, prompt: str
 ) -> MessageWithUsage:
     base_messages = [get_message(message, client_name) for message in messages]
     input_: list[BaseMessage] = [
-        SystemMessage(content=prompts.get_prompt("DISCORD_CONVERSATION_PROMPT")),
+        SystemMessage(content=prompt),
         *base_messages,
     ]
     response = await chatbot.get_model_response(input_, Model.OPENAI)
@@ -73,13 +73,13 @@ async def add_message_history_to_cache(message: discord.Message):
         await channel_cache.add_message(channel_message)
 
 
-async def send_conversation_message(message: discord.Message, client_name: str):
+async def send_conversation_message(message: discord.Message, client_name: str, prompt: str):
     await add_message_history_to_cache(message)
     channel_messages = channel_cache.get_messages(message.channel.id)
     filtered_messages = [
         message for message in channel_messages if not message.violating_openai_content_policy
     ]
-    response = await get_conversation_model_response(filtered_messages, client_name)
+    response = await get_conversation_model_response(filtered_messages, client_name, prompt)
     with SessionLocal() as db:
         add_request_tokens(db, message.channel.id, response["usage"])
     await message.channel.send(response["content"])
@@ -112,77 +112,26 @@ def replace_mentions_with_display_name(message: discord.Message):
             message.content = message.content.replace(pattern, user.display_name)
 
 
+async def check_if_user_is_authorized(ctx: Context[Bot]):
+    if ctx.author.id not in POWER_USER_IDS:
+        await ctx.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
+        return False
+    return True
+
+
 @bot.event
 async def on_ready():
     await bot.tree.sync(guild=TESTING_GUILD)
     with SessionLocal() as db:
         delete_request_tokens_older_than_24_hours(db)
-    logger.info(f"We have logged in as {bot.user}")
+    logger.info(f"We have logged in as {bot.user} with discord bot name {DISCORD_BOT_NAME}")
 
 
 @bot.event
 async def on_message(message: discord.Message):
+    await bot.process_commands(message)
     assert bot.user is not None
     if message.author == bot.user:
-        return
-
-    if message.content.startswith(f"!{DISCORD_BOT_NAME}_token_usage"):
-        async with message.channel.typing():
-            await message.channel.send(
-                f"Token usage for {message.channel.id} in the last 24 hours: {token_usage_last_24_hours(message.channel.id)}"
-            )
-            return
-
-    if message.content.startswith(f"!{DISCORD_BOT_NAME}_db_token_usage"):
-        if message.author.id not in POWER_USER_IDS:
-            await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
-            return
-        async with message.channel.typing():
-            with SessionLocal() as db:
-                await message.channel.send(
-                    f"Token usage for {message.channel.id}:\n{get_request_tokens(db, message.channel.id)}"
-                )
-        return
-
-    if message.content.startswith(f"!{DISCORD_BOT_NAME}_reset_token_usage"):
-        if message.author.id not in POWER_USER_IDS:
-            await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
-            return
-        with SessionLocal() as db:
-            delete_request_tokens(db, message.channel.id)
-        await message.channel.send("Token usage reset")
-        return
-
-    if message.content.startswith(f"!{DISCORD_BOT_NAME}_set_token_limit"):
-        if message.author.id not in POWER_USER_IDS:
-            await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
-            return
-        limit = int(message.content.split(" ")[1])
-        if limit < 0:
-            await message.channel.send("Token limit cannot be negative")
-            return
-        with SessionLocal() as db:
-            set_channel_token_limit(db, message.channel.id, limit)
-        await message.channel.send(f"Token limit set to {limit}")
-        return
-
-    if message.content.startswith(f"!{DISCORD_BOT_NAME}_get_token_limit"):
-        if message.author.id not in POWER_USER_IDS:
-            await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
-            return
-        with SessionLocal() as db:
-            await message.channel.send(
-                f"Token limit for {message.channel.id}: {get_channel_token_limit_or_default(message.channel.id)}"
-            )
-        return
-
-    if message.content.startswith(f"!{DISCORD_BOT_NAME}_delete_token_limit"):
-        if message.author.id not in POWER_USER_IDS:
-            await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
-            return
-        with SessionLocal() as db:
-            delete_channel_token_limit(db, message.channel.id)
-        await message.channel.send("Token limit deleted")
         return
 
     replace_mentions_with_display_name(message)
@@ -192,7 +141,9 @@ async def on_message(message: discord.Message):
             await message.channel.send(prompts.get_prompt("DISCORD_TOKEN_USAGE_LIMIT_REACHED"))
             return
         async with message.channel.typing():
-            await send_conversation_message(message, bot.user.name)
+            await send_conversation_message(
+                message, bot.user.name, prompt=prompts.get_prompt("DISCORD_CONVERSATION_PROMPT")
+            )
         return
 
 
@@ -209,6 +160,83 @@ async def token_usage(interaction: discord.Interaction):
     await interaction.response.send_message(
         f"Token usage for {channel_id} in the last 24 hours: {token_usage_last_24_hours(channel_id)}"
     )
+
+
+@bot.tree.command(
+    name="help",
+    description="Who am I?",
+    guild=TESTING_GUILD,
+)
+async def help(interaction: discord.Interaction):
+    await interaction.response.send_message(prompts.get_prompt("DISCORD_HELP_MESSAGE"))
+
+
+@bot.command(name=f"{DISCORD_BOT_NAME}_db_token_usage")
+async def db_token_usage(ctx: Context[Bot]):
+    if not await check_if_user_is_authorized(ctx):
+        return
+    async with ctx.typing():
+        with SessionLocal() as db:
+            await ctx.send(
+                f"Token usage for {ctx.channel.id}:\n{get_request_tokens(db, ctx.channel.id)}"
+            )
+
+
+@bot.command(name=f"{DISCORD_BOT_NAME}_reset_token_usage")
+async def reset_token_usage(ctx: Context[Bot]):
+    if not await check_if_user_is_authorized(ctx):
+        return
+    with SessionLocal() as db:
+        delete_request_tokens(db, ctx.channel.id)
+    await ctx.send("Token usage reset")
+
+
+@bot.command(name=f"{DISCORD_BOT_NAME}_set_token_limit")
+async def set_token_limit(ctx: Context[Bot]):
+    if not await check_if_user_is_authorized(ctx):
+        return
+    limit = int(ctx.message.content.split(" ")[1])
+    if limit < 0:
+        await ctx.send("Token limit cannot be negative")
+        return
+    with SessionLocal() as db:
+        set_channel_token_limit(db, ctx.channel.id, limit)
+    await ctx.send(f"Token limit set to {limit}")
+
+
+@bot.command(name=f"{DISCORD_BOT_NAME}_get_token_limit")
+async def get_token_limit(ctx: Context[Bot]):
+    if not await check_if_user_is_authorized(ctx):
+        return
+    with SessionLocal():
+        await ctx.send(
+            f"Token limit for {ctx.channel.id}: {get_channel_token_limit_or_default(ctx.channel.id)}"
+        )
+
+
+@bot.command(name=f"{DISCORD_BOT_NAME}_delete_token_limit")
+async def delete_token_limit(ctx: Context[Bot]):
+    if not await check_if_user_is_authorized(ctx):
+        return
+    with SessionLocal() as db:
+        delete_channel_token_limit(db, ctx.channel.id)
+    await ctx.send("Token limit deleted")
+
+
+@bot.command(name=f"{DISCORD_BOT_NAME}_assistant")
+async def assistant(ctx: Context[Bot]):
+    if not await check_if_user_is_authorized(ctx):
+        return
+    assert bot.user is not None
+    async with ctx.typing():
+        await send_conversation_message(
+            ctx.message, bot.user.name, prompt=prompts.get_prompt("DISCORD_POWERUSER_PROMPT")
+        )
+
+
+@bot.command(name=f"{DISCORD_BOT_NAME}_commands")
+async def commands(ctx: Context[Bot]):
+    await ctx.send(prompts.get_prompt("DISCORD_COMMANDS_MESSAGE"))
 
 
 bot.run(os.environ["DISCORD_APP_TOKEN"], log_handler=None)
