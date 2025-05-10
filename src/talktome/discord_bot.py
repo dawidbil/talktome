@@ -79,8 +79,15 @@ def token_usage_last_24_hours(channel_id: int) -> int:
     return sum([row.tokens for row in token_usage_last_24_hours])
 
 
+def get_channel_token_limit(channel_id: int):
+    limit = database.get_channel_token_limit(channel_id)
+    if limit == 0:
+        return TOKEN_USAGE_LIMIT
+    return limit
+
+
 def is_token_usage_reached(channel_id: int):
-    return token_usage_last_24_hours(channel_id) >= TOKEN_USAGE_LIMIT
+    return token_usage_last_24_hours(channel_id) >= get_channel_token_limit(channel_id)
 
 
 def replace_mentions_with_display_name(message: discord.Message):
@@ -109,7 +116,7 @@ async def on_message(message: discord.Message):
             )
             return
 
-    if message.content.startswith(f"!{DISCORD_BOT_NAME}_token_usage"):
+    if message.content.startswith(f"!{DISCORD_BOT_NAME}_db_token_usage"):
         if message.author.id not in POWER_USER_IDS:
             await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
             return
@@ -125,6 +132,33 @@ async def on_message(message: discord.Message):
             return
         database.delete_request_tokens(message.channel.id)
         await message.channel.send("Token usage reset")
+        return
+
+    if message.content.startswith(f"!{DISCORD_BOT_NAME}_set_token_limit"):
+        if message.author.id not in POWER_USER_IDS:
+            await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
+            return
+        limit = int(message.content.split(" ")[1])  
+        if limit < 0:
+            await message.channel.send("Token limit cannot be negative")
+            return
+        database.set_channel_token_limit(message.channel.id, limit)
+        await message.channel.send(f"Token limit set to {limit}")
+        return
+
+    if message.content.startswith(f"!{DISCORD_BOT_NAME}_get_token_limit"):
+        if message.author.id not in POWER_USER_IDS:
+            await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
+            return
+        await message.channel.send(f"Token limit for {message.channel.id}: {get_channel_token_limit(message.channel.id)}")
+        return
+
+    if message.content.startswith(f"!{DISCORD_BOT_NAME}_delete_token_limit"):
+        if message.author.id not in POWER_USER_IDS:
+            await message.channel.send(prompts.get_prompt("DISCORD_YOU_ARE_NOT_AUTHORIZED"))
+            return
+        database.delete_channel_token_limit(message.channel.id)
+        await message.channel.send("Token limit deleted")
         return
 
     replace_mentions_with_display_name(message)
