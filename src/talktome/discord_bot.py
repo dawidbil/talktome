@@ -35,10 +35,10 @@ def get_message(message: Message, client_name: str) -> BaseMessage:
 async def get_conversation_model_response(
     messages: list[Message], client_name: str
 ) -> MessageWithUsage:
-    human_messages = [get_message(message, client_name) for message in messages]
+    base_messages = [get_message(message, client_name) for message in messages]
     input_: list[BaseMessage] = [
         SystemMessage(content=prompts.get_prompt("DISCORD_CONVERSATION_PROMPT")),
-        *human_messages,
+        *base_messages,
     ]
     response = await chatbot.get_model_response(input_, Model.OPENAI)
     return response
